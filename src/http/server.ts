@@ -3,18 +3,14 @@ import { createGoal } from "../useCases/createGoal";
 import z from "zod";
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from "fastify-type-provider-zod";
 import { getWeekPendingGoals } from "../useCases/getWeekPendingGoals";
+import { createGoalCompletion } from "../useCases/createGoalCompletion";
+import { resourceLimits } from "worker_threads";
 
 const app = fastify().withTypeProvider<ZodTypeProvider>();
 
 // Validação das rotas
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
-
-app.get('/pending-goals', async () => {
-	const sql = await getWeekPendingGoals();
-
-	return sql
-})
 
 app.post('/goals', {
 	schema:{
@@ -25,13 +21,41 @@ app.post('/goals', {
 	}
 }, async(request) => {
 	// const goals = createGoalSchema.parse(request.body);
+	const { title, desiredWeeklyFrequency } = request.body;
 
-	await createGoal({
-		title: request.body.title,
-		desiredWeeklyFrequency: request.body.desiredWeeklyFrequency
-	})
+	try{
+		await createGoal({
+		title,
+		desiredWeeklyFrequency
+	})}
+	catch(err){
+		console.log(err)
+	}
 })
 
+app.post(
+    '/completions',
+    {
+      schema: {
+        body: z.object({
+          goalId: z.string(),
+        }),
+      },
+    },
+    async request => {
+      const { goalId } = request.body
+
+      await createGoalCompletion({
+        goalId,
+      })
+    }
+)
+
+app.get('/pending-goals', {}, async () => {
+    const { pendingGoals } = await getWeekPendingGoals()
+
+    return { pendingGoals }
+  })
 app.listen({ port: 3333}).then(() => {
 	console.log("HTTP server running 🚀");
 });
